@@ -13,11 +13,11 @@
  * limitations under the License.
  */
 
-const path = require("path");
-
-// webpack plugins
-const { CheckerPlugin } = require("awesome-typescript-loader");
+const ReactRefreshWebpackPlugin = require("@pmmmwh/react-refresh-webpack-plugin");
+const ForkTsCheckerNotifierWebpackPlugin = require("fork-ts-checker-notifier-webpack-plugin");
+const ForkTsCheckerWebpackPlugin = require("fork-ts-checker-webpack-plugin");
 const MiniCssExtractPlugin = require("mini-css-extract-plugin");
+const path = require("path");
 const WebpackNotifierPlugin = require("webpack-notifier");
 
 const { getPackageName } = require("./utils");
@@ -31,9 +31,22 @@ const PACKAGE_NAME = getPackageName();
  * Configure plugins loaded based on environment.
  */
 const plugins = [
-    // Used for async error reporting
-    // Can remove after https://github.com/webpack/webpack/issues/3460 resolved
-    new CheckerPlugin(),
+    new ForkTsCheckerWebpackPlugin(
+        IS_PRODUCTION
+            ? {
+                  async: false,
+                  typescript: {
+                      configFile: "./src/tsconfig.json",
+                  },
+                  memoryLimit: 4096,
+                  useTypescriptIncrementalApi: true,
+              }
+            : {
+                  typescript: {
+                      configFile: "./src/tsconfig.json",
+                  },
+              },
+    ),
 
     // CSS extraction is only enabled in production (see scssLoaders below).
     new MiniCssExtractPlugin({ filename: "[name].css" }),
@@ -41,8 +54,9 @@ const plugins = [
 
 if (!IS_PRODUCTION) {
     plugins.push(
-        // Trigger an OS notification when the build succeeds in dev mode.
-        new WebpackNotifierPlugin({ title: PACKAGE_NAME }),
+        new ReactRefreshWebpackPlugin(),
+        new ForkTsCheckerNotifierWebpackPlugin({ title: `${PACKAGE_NAME}: typescript`, excludeWarnings: false }),
+        new WebpackNotifierPlugin({ title: `${PACKAGE_NAME}: webpack` }),
     );
 }
 
@@ -74,15 +88,17 @@ const scssLoaders = [
 ];
 
 module.exports = {
+    // to automatically find tsconfig.json
+    context: process.cwd(),
+
     devtool: IS_PRODUCTION ? false : "inline-source-map",
 
     devServer: {
         contentBase: "./src",
         disableHostCheck: true,
         historyApiFallback: true,
-        https: false,
-        // TODO: enable HMR
-        // hot: true,
+        https: true,
+        hot: true,
         index: path.resolve(__dirname, "src/index.html"),
         inline: true,
         stats: "errors-only",
@@ -100,9 +116,10 @@ module.exports = {
         rules: [
             {
                 test: /\.tsx?$/,
-                loader: require.resolve("awesome-typescript-loader"),
+                loader: require.resolve("ts-loader"),
                 options: {
-                    configFileName: "./src/tsconfig.json",
+                    configFile: "./src/tsconfig.json",
+                    transpileOnly: true,
                 },
             },
             {
